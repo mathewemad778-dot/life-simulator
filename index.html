@@ -135,7 +135,7 @@
 
                             <div>
                                 <label for="job-title" class="block text-sm font-medium text-gray-700 mb-2">Job Title</label>
-                                <input type="text" name="job-title" value="Software Developer" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all" required>
+                                <input type="text" id="job-title" name="job-title" value="Software Developer" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all" required>
                             </div>
                         </div>
 
@@ -276,5 +276,467 @@
             </div>
         </footer>
 
-        
+        <script>
+            // Data layer - All simulation data and UI content
+            const navigationItems = [
+            { "label": "Home", "href": "#home", "icon": "fas fa-home" },
+            { "label": "Simulator", "href": "#simulator", "icon": "fas fa-gamepad" },
+            { "label": "How It Works", "href": "#how-it-works", "icon": "fas fa-question-circle" },
+            { "label": "About", "href": "#about", "icon": "fas fa-info-circle" }
+        ];
+
+        const footerLinks = [
+            { "label": "Privacy", "href": "#privacy" },
+            { "label": "Terms", "href": "#terms" },
+            { "label": "Contact", "href": "#contact" },
+            { "label": "GitHub", "href": "https://github.com", "icon": "fab fa-github" }
+        ];
+
+        const statConfigs = [
+            { "id": "wealth", "name": "Wealth", "color": "from-blue-400 to-primary", "bgColor": "bg-pastel-blue", "icon": "fas fa-coins", "unit": "$", "maxValue": 1000000 },
+            { "id": "health", "name": "Health", "color": "from-green-400 to-secondary", "bgColor": "bg-pastel-green", "icon": "fas fa-heartbeat", "unit": "%", "maxValue": 100 },
+            { "id": "energy", "name": "Energy", "color": "from-yellow-400 to-accent", "bgColor": "bg-pastel-yellow", "icon": "fas fa-battery-full", "unit": "%", "maxValue": 100 },
+            { "id": "happiness", "name": "Happiness", "color": "from-purple-400 to-purple-500", "bgColor": "bg-pastel-purple", "icon": "fas fa-smile", "unit": "%", "maxValue": 100 }
+        ];
+            // Simulation data storage
+            let simulationData = [];
+            let currentStats = {
+                wealth: 0,
+                health: 80,
+                energy: 80,
+                happiness: 70,
+                agr: 30,
+                month: 0
+            };
+
+            let isSimulationRunning = false;
+            let simulationInterval = null;
+
+            // Reusable render functions
+            function renderNavItems(items) {
+                return items.map(item =>
+                    `<li>
+                    <a href="${item.href}" class="flex items-center text-gray-600 hover:text-primary transition-colors">
+                        <i class="${item.icon} mr-2"></i>${item.label}
+                    </a>
+                </li>`
+                ).join("");
+            }
+
+            function renderFooterLinks(items) {
+            return items.map(item => 
+                `<li>
+                    <a href="${item.href}" class="text-sm text-gray-600 hover:text-primary transition-colors">
+                        ${item.icon ? `<i class="${item.icon} mr-1"></i>` : ""}${item.label}
+                    </a>
+                </li>`
+            ).join("");
+        }
+
+        function renderStatCard(stat) {
+             const percentage = Math.min(100, (currentStats[stat.id] / stat.maxValue) * 100);
+            let statusClass = "highlight-neutral";
+            if (percentage > 70) statusClass = "highlight-positive";
+            if (percentage < 40) statusClass = "highlight-negative";
+
+            return `
+                <div class="${statusClass} p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full ${stat.bgColor} flex items-center justify-center mr-3">
+                                <i class="${stat.icon} text-gray-700"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800">${stat.name}</h4>
+                                <p class="text-2xl font-bold text-gray-800">${stat.unit === "$" ? "$" : ""}${currentStats[stat.id].toLocaleString()}${stat.unit === "%" ? "%" : ""}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="stat-bar h-2.5 rounded-full bg-gradient-to-r ${stat.color}" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>0${stat.unit === "$" ? "" : "%"}</span>
+                        <span>${stat.maxValue.toLocaleString()}${stat.unit === "$" ? "" : "%"}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTableHeader() {
+            return `
+            <tr>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Wealth</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Health</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Energy</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Happiness</th>
+                </tr>
+                `;
+        }
+
+        function renderMonthlyRow(monthData, index) {
+            const monthNum = index + 1;
+            const age = currentStats.age + Math.floor(monthNum / 12);
+
+            // Determine row highlight based on trends
+            let rowClass= "";
+            if (monthNum > 1) {
+                const prevData = simulationData[index - 1];
+                const wealthChange = monthData.wealth - prevData.wealth;
+                const happinessChange = monthData.happiness - prevData.happiness;
+
+                if (wealthChange > 0 && happinessChange > 0) {
+                    rowClass = "highlight-positive";
+                } else if (wealthChange < 0 && happinessChange < 0) {
+                    rowClass = "highlight-negative";
+                }
+            }
+
+            return `
+                <tr class="month-card ${rowClass}">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${monthNum}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${age}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold">$${monthData.wealth.toLocaleString()}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-gradient-to-r from-green-400 to-secondary h-2 rounded-full" style="width: ${monthData.health}%"></div>
+                            </div>
+                            <span class="text-sm text-gray-700">${Math.round(monthData.health)}%</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-gradient-to-r from-yellow-400 to-accent h-2 rounded-full" style="width: ${monthData.energy}%"></div>
+                            </div>
+                            <span class="text-sm text-gray-700">${Math.round(monthData.energy)}%</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-gradient-to-r from-purple-400 to-purple-500 h-2 rounded-full" style="width: ${monthData.happiness}%"></div>
+                            </div>
+                            <span class="text-sm text-gray-700">${Math.round(monthData.happiness)}%</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function renderVisualizations() {
+            if (simulationData.length === 0) return "";
+
+            // Create visualization for each stat
+            return statConfigs.map(stat => {
+                const dataPoints = simulationData.map((data, index) => data[stat.id]);
+                const maxData = Math.max(...dataPoints);
+                const minData = Math.min(...dataPoints);
+
+                return `
+                <div class="mb-6">
+                    <h4 class="font-semibold text-gray-800 mb-3 flex items-center">
+                        <i class="${stat.icon} mr-2 text-${stat.id === 'wealth' ? 'primary' : stat.id === 'health' ? 'secondary' : stat.id ==='energy' ? 'accent' : 'purple-500'}"></i>
+                        ${stat.name} Over Time
+                    </h4>
+                    <div class="bg-${stat.bgColor.split('-')[1]}-50 p-4 rounded-lg">
+                        <div class="flex items-end h-32 space-x-1">
+                            ${dataPoints.map((value, index) => {
+                                const height = maxData > 0 ? (value / maxData) * 100 : 0;
+                                return `<div class="flex-1 bg-gradient-to-t ${stat.color} rounded-t" style="height: ${height}%" title="Month ${index+1}: ${value.toLocaleString()}${stat.unit}"></div>`;
+                            }).join("")}
+                        </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-2">
+                                <span>Start: ${dataPoints[0].toLocaleString()}${stat.unit}</span>
+                                <span>End: ${dataPoints[dataPoints.length-1].toLocaleString()}${stat.unit}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        // Simulation Logic
+        function calculateMonthlyChange(userInputs) {
+            const { monthlySalary, workHours, exerciseDays, sleepHours } = userInputs;
+
+            // Base monthly changes
+            let wealthChange = monthlySalary - 50; 
+            let healthChange = 0;
+            let energyChange = 0;
+
+            // Health Factors
+            if (sleepHours >= 7) healthChange +=1;
+            else if (exerciseDays === 0) healthChange -= 3;
+
+            if (workHours > 9) healthChange -= 1;
+
+            // Energy factors
+            energyChange += (sleepHours - 6) * 2;
+            energyChange -= (workHours - 8) * 3;
+            energyChange += exerciseDays * 1.5;
+
+            // Happiness calculation 
+            const happinessChange = 
+            (wealthChange / 1000) * 0.3 +
+            (healthChange / 10) * 0.4 +
+            (energyChange / 10) * 0.3;
+
+            return {
+                wealth: Math.max(wealthChange, -500), 
+                health: Math.max(Math.min(healthChange, 5), -5), 
+                energy: Math.max(Math.min(energyChange, 10), -10), 
+                happiness: Math.max(Math.min(happinessChange * 10, 8), -8) 
+            };
+        }
+
+        function runSimulation(userInputs) {
+            // Reset simulation data
+            simulationData = [];
+            currentStats = {
+                wealth: 10000, 
+                health: 80,
+                energy: 80,
+                happiness: 70,
+                age: parseInt(document.getElementById("current-age").value),
+                month: 0
+            };
+
+            // Store initial state
+            simulationData.push({...currentStats});
+
+            // Run simulation for 60 months (5 year)
+            for (let month = 1; month <= 60; month++) {
+                const changes = calculateMonthlyChange(userInputs);
+
+                // Apply changes with some randomness 
+                const randomFactor = () => 0.9 + Math.random() * 0.2;
+
+                currentStats.wealth += changes.wealth * randomFactor();
+                currentStats.health = Math.max(10, Math.min(100, currentStats.health + changes.health * randomFactor()));
+                currentStats.energy = Math.max(10, Math.min(100, currentStats.energy + changes.energy * randomFactor()));
+                currentStats.happiness = Math.max(10, Math.min(100, currentStats.happiness + changes.happiness * randomFactor()));
+                currentStats.month = month;
+
+                // Add to simulation data
+                simulationData.push({...currentStats});
+            }
+
+            updateResultsDisplay();
+        }
+
+        function updateResultsDisplay() {
+            // Update current stats display
+            const currentStatsContainer = document.getElementById("current-stats");
+            currentStatsContainer.innerHTML = statConfigs.map(stat => renderStatCard(stat)).join("");
+
+            // Update table header
+            document.getElementById("table-header").innerHTML = renderTableHeader();
+
+            // Update monthly results (show first 12 months initially)
+            const monthlyResultContainer = document.getElementById("monthly-results");
+            const monthsToShow = Math.min(12, simulationData.length);
+            monthlyResultContainer.innerHTML = simulationData
+                .slice(0, monthsToShow)
+                .map((data, index) => renderMonthlyRow(data, index))
+                .join("");
+
+            // Update visualizations
+            document.getElementById("visualization-container").innerHTML = renderVisualizations();
+
+            // Show all months button if we have more data
+            if (simulationData.length > 12) {
+                const showAllBtn = document.createElement("button");
+                showAllBtn.id = "show-all-months";
+                showAllBtn.className = "mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-all";
+                showAllBtn.innerHTML = `<i class="fas fa-expand mr-2"></i>Show All 60 Months`;
+                showAllBtn.onclick = showAllMonths;
+
+                if (!document.getElementById("show-all-months")) {
+                    monthlyResultContainer.parentElement.appendChild(showAllBtn);
+                }
+            }
+        }
+
+        function showAllMonths() {
+            const monthlyResultsContainer = document.getElementById("monthly-results");
+            monthlyResultsContainer.innerHTML = simulationData
+            .map((data, index) => renderMonthlyRow(data, index))
+            .join("");
+
+            document.getElementById("show-all-months").remove();
+        }
+
+        function animateSimulation(userInputs) {
+            if (isSimulationRunning) return;
+
+            isSimulationRunning = true;
+            document.getElementById("pause-sim").classList.remove("hidden");
+            document.getElementById("run-simulation").disabled = true;
+            document.getElementById("run-simulation").innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Simulating...`;
+
+            // Reset simulation data
+            simulationData = [];
+            currentStats = {
+                wealth: 10000,
+                health: 80,
+                energy: 80,
+                happiness: 70,
+                age: parseInt(document.getElementById("current-age").value),
+                month: 0
+            };
+
+            simulationData.push({...currentStats});
+            updateResultsDisplay();
+
+            let month = 0;
+            simulationInterval = setInterval(() => {
+                if (month >= 60) {
+                    clearInterval(simulationInterval);
+                    isSimulationRunning = false;
+                    document.getElementById("pause-sim").classList.add("hidden");
+                    document.getElementById("run-simulation").disabled = false;
+                    document.getElementById("run-simulation").innerHTML = `<i class="fas fa-play-circle mr-3"></i>Run 5-Year Life Simulation`;
+                    return;
+                }
+
+                month++;
+                const changes = calculateMonthlyChange(userInputs);
+
+                // Apply changes with animation
+                currentStats.wealth += changes.wealth;
+                currentStats.health = Math.max(10, Math.min(100, currentStats.health + changes.health));
+                currentStats.energy = Math.max(10, Math.min(100, currentStats.energy + changes.energy));
+                currentStats.happiness = Math.max(10, Math.min(100, currentStats.happiness + changes.happiness));
+                currentStats.month = month;
+
+                simulationData.push({...currentStats});
+
+                // Update display every 5 months for performance
+                if (month % 5 === 0 || month === 60) {
+                    updateResultsDisplay();
+                }
+            }, 100);
+        }
+
+        function pauseSimulation() {
+            if (simulationInterval) {
+                clearInterval(simulationInterval);
+                simulationInterval = null;
+                isSimulationRunning = false;
+                document.getElementById("pause-sim").innerHTML = `<i class="fas fa-play mr-2"></i>Resume`;
+                document.getElementById("pause-sim").onclick = resumeSimulation;
+            }
+        }
+
+        function resumeSimulation() {
+            const userInputs = gatherUserInputs();
+            animateSimulation(userInputs);
+            document.getElementById("pause-sim").innerHTML = `<i class="fas fa-pause mr-2"></i>Pause`;
+            document.getElementById("pause-sim").onclick = pauseSimulation;
+        }
+
+        function gatherUserInputs() {
+            return {
+                currentAge: parseInt(document.getElementById("current-age").value),
+                jobTitle: document.getElementById("job-title").value,
+                monthlySalary: parseInt(document.getElementById("monthly-salary").value),
+                workHours: parseInt(document.getElementById("work-hours").value),
+                exerciseDays: parseInt(document.getElementById("exercise-days").value),
+                sleepHours: parseInt(document.getElementById("sleep-hours").value)
+            };
+        }
+
+        function exportData() {
+            if (simulationData.length === 0) {
+                alert("Please run a simulation first to export data.");
+                return;
+            }
+
+            const dataStr = JSON.stringify(simulationData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: "application/json"});
+            const url = URL.createObjectURL(dataBlob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `life-simulation-${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize the page
+        document.addEventListener("DOMContentLoaded", function() {
+            // Render nav and footer
+            document.getElementById("nav-list").innerHTML = renderNavItems(navigationItems);
+            document.getElementById("footer-links").innerHTML = renderFooterLinks(footerLinks);
+
+            // Set current year in footer
+            document.getElementById("current-year").textContent = new Date().getFullYear();
+
+            // Set up event listeners
+            document.getElementById("life-form").addEventListener("submit", function(e) {
+                e.preventDefault();
+                const userInputs = gatherUserInputs();
+                animateSimulation(userInputs);
+            });
+
+            document.getElementById("pause-sim").addEventListener("click", pauseSimulation);
+            document.getElementById("reset-sim").addEventListener("click", function() {
+                if (simulationInterval) {
+                    clearInterval(simulationInterval);
+                    simulationInterval = null;
+                    isSimulationRunning = false;
+                }
+
+                document.getElementById("pause-sim").classList.add("hidden");
+                document.getElementById("run-simulation").disabled = false;
+                document.getElementById("run-simulation").innerHTML = `<i class="fas fa-play-circle mr-3"></i>Run 5-Year Life Simulation`;
+                
+                // Reset display to initial state
+                simulationData = [];
+                currentStats = {
+                    wealth: 0,
+                    health: 80,
+                    energy: 80,
+                    happiness: 70,
+                    age: parseInt(document.getElementById("current-age").value),
+                    month: 0
+                };
+
+                updateResultsDisplay();
+            });
+
+            document.getElementById("export-data").addEventListener("click", exportData);
+
+            // Delegated event handling for nav links
+            document.addEventListener("click", function(event) {
+                const link = event.target.closest("a[href^='#']");
+                if (!link) return;
+
+                event.preventDefault();
+                const targetId = link.getAttribute("href");
+
+                if (targetId === "#home") {
+                    window.scrollTo({ top: 0, behavior: "smooth"});
+                } else if (targetId === "#simulator") {
+                    document.getElementById("life-form").scrollIntoView({ behavior: "smooth", block: "start"});
+                } else if  (targetId === "#how-it-works") {
+                    // Scroll to explanation section
+                    const explanation = document.querySelector(".bg-pastel-yellow");
+                    if (explanation) explanation.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else if (targetId === "#about") {
+                    // Scroll to footer
+                    document.querySelector("footer").scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+            });
+
+            // Initialize with sample data display
+            updateResultsDisplay();
+        });
+        </script>
     </body>
